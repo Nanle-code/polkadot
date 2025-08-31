@@ -2,12 +2,11 @@
 
 #[ink::contract]
 mod crowd_funding {
-    use ink::storage::Mapping;
-    use ink::prelude::vec::Vec;
     use ink::prelude::string::String;
+    use ink::prelude::vec::Vec;
     use ink::primitives::U256;
+    use ink::storage::Mapping;
     use ink::H160;
-    
 
     #[ink(storage)]
     pub struct CrowdFunding {
@@ -46,9 +45,9 @@ mod crowd_funding {
         pub withdrawn: bool,
     }
 
-     #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq)]
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
-        pub enum Error {
+    pub enum Error {
         /// Campaign does not exist
         CampaignNotFound,
         /// Campaign has ended
@@ -122,20 +121,18 @@ mod crowd_funding {
         goal: U256,
     }
 
-     pub type Result<T> = core::result::Result<T, Error>;
-
+    pub type Result<T> = core::result::Result<T, Error>;
 
     impl CrowdFunding {
         #[ink(constructor)]
         pub fn new() -> Self {
-            Self { 
+            Self {
                 campaign_counter: 0,
                 campaigns: Mapping::default(),
                 contributions: Mapping::default(),
                 contributors: Mapping::default(),
-                }
+            }
         }
-      
 
         /// Create a new crowdfunding campaign
         #[ink(message)]
@@ -158,7 +155,10 @@ mod crowd_funding {
             let campaign_id = self.campaign_counter;
 
             // Fixed: Use proper checked arithmetic
-            self.campaign_counter = self.campaign_counter.checked_add(1).expect("Campaign counter overflow");
+            self.campaign_counter = self
+                .campaign_counter
+                .checked_add(1)
+                .expect("Campaign counter overflow");
 
             let campaign = Campaign {
                 creator: self.env().caller(),
@@ -189,13 +189,16 @@ mod crowd_funding {
         #[ink(message, payable)]
         pub fn contribute(&mut self, campaign_id: u32) -> Result<()> {
             let contribution: U256 = self.env().transferred_value();
-            
+
             if contribution == U256::from(0) {
                 return Err(Error::ZeroContribution);
             }
 
-            let mut campaign = self.campaigns.get(campaign_id).ok_or(Error::CampaignNotFound)?;
-            
+            let mut campaign = self
+                .campaigns
+                .get(campaign_id)
+                .ok_or(Error::CampaignNotFound)?;
+
             if !campaign.active {
                 return Err(Error::CampaignInactive);
             }
@@ -206,14 +209,18 @@ mod crowd_funding {
             }
 
             let contributor = self.env().caller();
-            
+
             // Update contribution amount for this contributor
-            let existing_contribution = self.contributions.get((campaign_id, contributor)).unwrap_or(U256::from(0));
+            let existing_contribution = self
+                .contributions
+                .get((campaign_id, contributor))
+                .unwrap_or(U256::from(0));
 
             #[allow(clippy::arithmetic_side_effects)]
             let new_contribution = existing_contribution + contribution;
 
-            self.contributions.insert((campaign_id, contributor), &new_contribution);
+            self.contributions
+                .insert((campaign_id, contributor), &new_contribution);
 
             // Add contributor to list if first time contributing
             if existing_contribution == U256::from(0) {
@@ -224,7 +231,10 @@ mod crowd_funding {
 
             // Update campaign raised amount
             // Fixed: Use proper checked arithmetic and assign back
-            campaign.raised = campaign.raised.checked_add(contribution).expect("Contribution overflow");
+            campaign.raised = campaign
+                .raised
+                .checked_add(contribution)
+                .expect("Contribution overflow");
             self.campaigns.insert(campaign_id, &campaign);
 
             self.env().emit_event(ContributionMade {
@@ -249,8 +259,11 @@ mod crowd_funding {
         /// Withdraw funds (only by campaign creator if goal reached)
         #[ink(message)]
         pub fn withdraw_funds(&mut self, campaign_id: u32) -> Result<()> {
-            let mut campaign = self.campaigns.get(campaign_id).ok_or(Error::CampaignNotFound)?;
-            
+            let mut campaign = self
+                .campaigns
+                .get(campaign_id)
+                .ok_or(Error::CampaignNotFound)?;
+
             if campaign.creator != self.env().caller() {
                 return Err(Error::OnlyCreator);
             }
@@ -290,8 +303,11 @@ mod crowd_funding {
         /// Request refund (only if campaign failed)
         #[ink(message)]
         pub fn request_refund(&mut self, campaign_id: u32) -> Result<()> {
-            let campaign = self.campaigns.get(campaign_id).ok_or(Error::CampaignNotFound)?;
-            
+            let campaign = self
+                .campaigns
+                .get(campaign_id)
+                .ok_or(Error::CampaignNotFound)?;
+
             let current_block = self.env().block_number();
             if current_block < campaign.deadline {
                 return Err(Error::RefundNotAvailable);
@@ -302,14 +318,18 @@ mod crowd_funding {
             }
 
             let contributor = self.env().caller();
-            let contribution = self.contributions.get((campaign_id, contributor)).ok_or(Error::NoContribution)?;
+            let contribution = self
+                .contributions
+                .get((campaign_id, contributor))
+                .ok_or(Error::NoContribution)?;
 
             if contribution == U256::from(0) {
                 return Err(Error::NoContribution);
             }
 
             // Fixed: Set contribution to 0 instead of remove (if remove method doesn't exist)
-            self.contributions.insert((campaign_id, contributor), &U256::from(0));
+            self.contributions
+                .insert((campaign_id, contributor), &U256::from(0));
 
             // Transfer refund
             if self.env().transfer(contributor, contribution).is_err() {
@@ -334,7 +354,9 @@ mod crowd_funding {
         /// Get contribution amount for a specific contributor
         #[ink(message)]
         pub fn get_contribution(&self, campaign_id: u32, contributor: H160) -> U256 {
-            self.contributions.get((campaign_id, contributor)).unwrap_or(U256::from(0))
+            self.contributions
+                .get((campaign_id, contributor))
+                .unwrap_or(U256::from(0))
         }
 
         /// Get list of contributors for a campaign
@@ -373,8 +395,11 @@ mod crowd_funding {
         /// Emergency function to deactivate a campaign (only by creator)
         #[ink(message)]
         pub fn deactivate_campaign(&mut self, campaign_id: u32) -> Result<()> {
-            let mut campaign = self.campaigns.get(campaign_id).ok_or(Error::CampaignNotFound)?;
-            
+            let mut campaign = self
+                .campaigns
+                .get(campaign_id)
+                .ok_or(Error::CampaignNotFound)?;
+
             if campaign.creator != self.env().caller() {
                 return Err(Error::OnlyCreator);
             }
